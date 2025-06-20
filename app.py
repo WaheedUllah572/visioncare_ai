@@ -6,7 +6,7 @@ from utils import (
     load_detection_model, detect_objects, draw_boxes
 )
 
-# Load object detection model once
+# Load object detection model
 detection_model = load_detection_model()
 
 st.set_page_config(page_title="👁️ VisionCare AI", layout="centered", page_icon="🌟")
@@ -22,34 +22,34 @@ Empowering Accessibility with AI Vision 💡
 ---
 """)
 
-# 🟨 Upload Image + Mobile Tip
-uploaded_file = st.sidebar.file_uploader("📂 Upload Image")
+# ✅ Allow many image formats and include browser tip
+uploaded_file = st.sidebar.file_uploader(
+    "📂 Upload Image",
+    type=["jpg", "jpeg", "png", "webp", "bmp", "tiff"]
+)
 
-st.sidebar.markdown("""
-🧠 **Tip for Mobile Users:**
+st.sidebar.markdown(
+    "⚠️ **Note:** File upload may not work on some mobile browsers like **Chrome**. "
+    "Please use **Microsoft Edge** or **Firefox** on mobile for best experience."
+)
 
-📱 If **file upload doesn't work** on **Google Chrome**,  
-please try using the **Microsoft Edge** or **Firefox** browser instead.
-""")
-
+# ✅ Confirm upload with details
 if uploaded_file:
     st.sidebar.image(uploaded_file, use_container_width=True)
     st.success(f"Uploaded: {uploaded_file.name}")
-    st.write(f"File type: {uploaded_file.type}")
-    st.write(f"File size: {uploaded_file.size} bytes")
+    st.caption(f"Type: {uploaded_file.type} | Size: {uploaded_file.size} bytes")
 
-# Buttons
+# Feature buttons
 btn1, btn2, btn3, btn4 = st.columns(4)
 describe_btn = btn1.button("🏞️ Describe Scene")
 object_btn = btn2.button("🚧 Detect Objects")
 assist_btn = btn3.button("🤖 Assist")
 text_btn = btn4.button("📝 Extract Text")
 
-# If file uploaded
+# Main logic
 if uploaded_file:
     img = Image.open(uploaded_file)
 
-    # 🏞️ Scene Description
     if describe_btn:
         with st.spinner("Analyzing scene..."):
             from openai import OpenAI
@@ -73,7 +73,6 @@ if uploaded_file:
             except Exception as e:
                 st.error(f"Error: {e}")
 
-    # 🚧 Object Detection
     if object_btn:
         with st.spinner("Detecting objects..."):
             preds = detect_objects(img, detection_model)
@@ -81,7 +80,6 @@ if uploaded_file:
             st.subheader("🚧 Detected Objects")
             st.image(boxed)
 
-    # 🤖 Task Assistance
     if assist_btn:
         with st.spinner("Providing assistance..."):
             from openai import OpenAI
@@ -105,7 +103,6 @@ if uploaded_file:
             except Exception as e:
                 st.error(f"Error: {e}")
 
-    # 📝 OCR via GPT-4o
     if text_btn:
         with st.spinner("Extracting text..."):
             extracted_text = extract_text_from_image(uploaded_file)
