@@ -1,83 +1,76 @@
-from PIL import Image
-from io import BytesIO
+from PIL import Image, ImageDraw
 import base64
-from openai import OpenAI
-import streamlit as st
+import io
 import torch
 from torchvision import transforms
 from torchvision.models.detection import fasterrcnn_resnet50_fpn
+import pytesseract
 
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+# Convert image to base64 (for OpenAI Vision input)
+def convert_image_to_base64(uploaded_file):
+    img = Image.open(uploaded_file)
 
-def convert_image_to_base64(image_file):
-    img = Image.open(image_file)
-    buffered = BytesIO()
+    # ✅ Convert if RGBA or palette mode (fix for JPEG error)
+    if img.mode in ("RGBA", "P"):
+        img = img.convert("RGB")
+
+    buffered = io.BytesIO()
     img.save(buffered, format="JPEG")
-    img_bytes = buffered.getvalue()
-    return base64.b64encode(img_bytes).decode()
+    img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+    return img_b64
 
-def extract_text_from_image(image_file):
-    try:
-        img = Image.open(image_file)
-        buffered = BytesIO()
-        img.save(buffered, format="JPEG")
-        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Extract all visible text from this image."},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_str}"}}
-                    ]
-                }
-            ],
-            max_tokens=1024
-        )
-        return response.choices[0].message.content
+# OCR text extraction using pytesseract
+def extract_text_from_image(uploaded_file):
+    img = Image.open(uploaded_file)
+    return pytesseract.image_to_string(img)
 
-    except Exception as e:
-        return f"❌ OCR via GPT-4o failed: {e}"
 
-@st.cache_resource
+# Load object detection model (Faster R-CNN)
 def load_detection_model():
     model = fasterrcnn_resnet50_fpn(pretrained=True)
     model.eval()
     return model
 
+
+# Run detection and return results
 def detect_objects(image, model, threshold=0.5):
     transform = transforms.Compose([transforms.ToTensor()])
     img_tensor = transform(image)
-    predictions = model([img_tensor])[0]
-    keep = torch.ops.torchvision.nms(predictions["boxes"], predictions["scores"], 0.5)
+    preds = model([img_tensor])[0]
 
+    # Filter by score threshold
+    keep = preds['scores'] > threshold
     return {
-        "boxes": predictions["boxes"][keep],
-        "labels": predictions["labels"][keep],
-        "scores": predictions["scores"][keep],
+        "boxes": preds["boxes"][keep],
+        "labels": preds["labels"][keep],
+        "scores": preds["scores"][keep]
     }
 
+
+# Draw boxes on the image
 COCO_CLASSES = [
-    "__background__", "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat",
-    "traffic light", "fire hydrant", "N/A", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse",
-    "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "N/A", "backpack", "umbrella", "N/A", "N/A", "handbag",
-    "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove",
-    "skateboard", "surfboard", "tennis racket", "bottle", "N/A", "wine glass", "cup", "fork", "knife", "spoon",
-    "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake",
-    "chair", "couch", "potted plant", "bed", "N/A", "dining table", "N/A", "N/A", "toilet", "N/A", "tv", "laptop",
-    "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "N/A",
-    "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
+    "__background__","person","bicycle","car","motorcycle","airplane","bus","train","truck","boat",
+    "traffic light","fire hydrant","N/A","stop sign","parking meter","bench","bird","cat","dog","horse",
+    "sheep","cow","elephant","bear","zebra","giraffe","N/A","backpack","umbrella","N/A","N/A","handbag",
+    "tie","suitcase","frisbee","skis","snowboard","sports ball","kite","baseball bat","baseball glove",
+    "skateboard","surfboard","tennis racket","bottle","N/A","wine glass","cup","fork","knife","spoon",
+    "bowl","banana","apple","sandwich","orange","broccoli","carrot","hot dog","pizza","donut","cake",
+    "chair","couch","potted plant","bed","N/A","dining table","N/A","N/A","toilet","N/A","tv","laptop",
+    "mouse","remote","keyboard","cell phone","microwave","oven","toaster","sink","refrigerator","N/A",
+    "book","clock","vase","scissors","teddy bear","hair drier","toothbrush"
 ]
 
 def draw_boxes(image, predictions, threshold=0.5):
-    from PIL import ImageDraw
     draw = ImageDraw.Draw(image)
-    for box, label, score in zip(predictions["boxes"], predictions["labels"], predictions["scores"]):
-        if score >= threshold:
+    labels = predictions["labels"]
+    boxes = predictions["boxes"]
+    scores = predictions["scores"]
+
+    for label, box, score in zip(labels, boxes, scores):
+        if score > threshold:
             x1, y1, x2, y2 = box
-            class_name = COCO_CLASSES[label.item()]
+            class_name = COCO_CLASSES[label.item()] if label.item() < len(COCO_CLASSES) else "Unknown"
             draw.rectangle([x1, y1, x2, y2], outline="yellow", width=3)
             draw.text((x1, y1), f"{class_name} ({score:.2f})", fill="black")
     return image
