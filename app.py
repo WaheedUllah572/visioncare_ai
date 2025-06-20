@@ -22,27 +22,34 @@ Empowering Accessibility with AI Vision 💡
 ---
 """)
 
-# ✅ Updated to support mobile (no strict file types)
+# 🟨 Upload Image + Mobile Tip
 uploaded_file = st.sidebar.file_uploader("📂 Upload Image")
 
-# ✅ Display metadata to confirm upload works on mobile
+st.sidebar.markdown("""
+🧠 **Tip for Mobile Users:**
+
+📱 If **file upload doesn't work** on **Google Chrome**,  
+please try using the **Microsoft Edge** or **Firefox** browser instead.
+""")
+
 if uploaded_file:
     st.sidebar.image(uploaded_file, use_container_width=True)
     st.success(f"Uploaded: {uploaded_file.name}")
     st.write(f"File type: {uploaded_file.type}")
     st.write(f"File size: {uploaded_file.size} bytes")
 
+# Buttons
 btn1, btn2, btn3, btn4 = st.columns(4)
 describe_btn = btn1.button("🏞️ Describe Scene")
 object_btn = btn2.button("🚧 Detect Objects")
 assist_btn = btn3.button("🤖 Assist")
 text_btn = btn4.button("📝 Extract Text")
 
-# Core features
+# If file uploaded
 if uploaded_file:
     img = Image.open(uploaded_file)
 
-    # 🏞️ Scene description
+    # 🏞️ Scene Description
     if describe_btn:
         with st.spinner("Analyzing scene..."):
             from openai import OpenAI
@@ -98,7 +105,7 @@ if uploaded_file:
             except Exception as e:
                 st.error(f"Error: {e}")
 
-    # 📝 OCR (via GPT-4o)
+    # 📝 OCR via GPT-4o
     if text_btn:
         with st.spinner("Extracting text..."):
             extracted_text = extract_text_from_image(uploaded_file)
