@@ -87,8 +87,4 @@ if uploaded_file:
             except Exception as e:
                 st.error(f"Error: {e}")
 
-    if text_btn:
-        with st.spinner("Extracting text..."):
-            extracted_text = extract_text_from_image(uploaded_file)
-            st.subheader("📝 Extracted Text")
-            st.write(extracted_text)
+

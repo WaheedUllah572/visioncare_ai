@@ -4,42 +4,28 @@ import io
 import torch
 from torchvision import transforms
 from torchvision.models.detection import fasterrcnn_resnet50_fpn
-import pytesseract
 
-# Convert image to base64 (for OpenAI Vision input)
+# Convert image to base64 for OpenAI Vision API
 def convert_image_to_base64(uploaded_file):
     img = Image.open(uploaded_file)
-
-    # ✅ Convert if RGBA or palette mode (fix for JPEG error)
     if img.mode in ("RGBA", "P"):
         img = img.convert("RGB")
-
     buffered = io.BytesIO()
     img.save(buffered, format="JPEG")
     img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
     return img_b64
 
-
-# OCR text extraction using pytesseract
-def extract_text_from_image(uploaded_file):
-    img = Image.open(uploaded_file)
-    return pytesseract.image_to_string(img)
-
-
-# Load object detection model (Faster R-CNN)
+# Load object detection model
 def load_detection_model():
     model = fasterrcnn_resnet50_fpn(pretrained=True)
     model.eval()
     return model
 
-
-# Run detection and return results
+# Detect objects in the image
 def detect_objects(image, model, threshold=0.5):
     transform = transforms.Compose([transforms.ToTensor()])
     img_tensor = transform(image)
     preds = model([img_tensor])[0]
-
-    # Filter by score threshold
     keep = preds['scores'] > threshold
     return {
         "boxes": preds["boxes"][keep],
@@ -47,8 +33,7 @@ def detect_objects(image, model, threshold=0.5):
         "scores": preds["scores"][keep]
     }
 
-
-# Draw boxes on the image
+# Draw object boxes on the image
 COCO_CLASSES = [
     "__background__","person","bicycle","car","motorcycle","airplane","bus","train","truck","boat",
     "traffic light","fire hydrant","N/A","stop sign","parking meter","bench","bird","cat","dog","horse",
@@ -63,11 +48,7 @@ COCO_CLASSES = [
 
 def draw_boxes(image, predictions, threshold=0.5):
     draw = ImageDraw.Draw(image)
-    labels = predictions["labels"]
-    boxes = predictions["boxes"]
-    scores = predictions["scores"]
-
-    for label, box, score in zip(labels, boxes, scores):
+    for label, box, score in zip(predictions["labels"], predictions["boxes"], predictions["scores"]):
         if score > threshold:
             x1, y1, x2, y2 = box
             class_name = COCO_CLASSES[label.item()] if label.item() < len(COCO_CLASSES) else "Unknown"
