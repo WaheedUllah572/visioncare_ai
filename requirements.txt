@@ -4,4 +4,4 @@ python-dotenv
 Pillow
 torch
 torchvision
-pytesseract
+
