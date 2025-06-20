@@ -5,7 +5,6 @@ from utils import (
     convert_image_to_base64, extract_text_from_image,
     load_detection_model, detect_objects, draw_boxes
 )
-
 from openai import OpenAI
 
 # Load object detection model
@@ -25,14 +24,23 @@ Empowering Accessibility with AI Vision 💡
 ---
 """)
 
-# File uploader
-uploaded_file = st.sidebar.file_uploader("📂 Upload Image", type=["jpg", "jpeg", "png", "webp"])
+# ✅ File uploader with mobile support
+uploaded_file = st.sidebar.file_uploader(
+    "📂 Upload Image",
+    type=["jpg", "jpeg", "png", "webp"],
+    accept_multiple_files=False,
+    key="file_uploader",
+    label_visibility="visible"
+)
 
+# ✅ Show file upload success/failure
 if uploaded_file:
+    st.sidebar.success(f"✅ File uploaded: {uploaded_file.name}")
     st.sidebar.image(uploaded_file, use_container_width=True)
-    st.write("📁 Uploaded File:", uploaded_file)  # Debug to check if file is read correctly
+else:
+    st.sidebar.warning("📷 Please upload an image file.")
 
-# Button layout
+# Buttons row
 btn1, btn2, btn3, btn4 = st.columns(4)
 describe_btn = btn1.button("🏞️ Describe Scene")
 object_btn = btn2.button("🚧 Detect Objects")
@@ -41,11 +49,12 @@ text_btn = btn4.button("📝 Extract Text")
 
 if uploaded_file:
     try:
-        img = Image.open(uploaded_file).convert("RGB")  # Fix for mobile format issues
+        img = Image.open(uploaded_file).convert("RGB")  # Ensure format compatibility
     except Exception as e:
-        st.error(f"❌ Failed to open image: {e}")
+        st.error(f"❌ Error opening image: {e}")
+        st.stop()
 
-    # Scene Description
+    # 🏞️ Scene Description
     if describe_btn:
         with st.spinner("Analyzing scene..."):
             img_b64 = convert_image_to_base64(uploaded_file)
@@ -68,7 +77,7 @@ if uploaded_file:
             except Exception as e:
                 st.error(f"❌ Error: {e}")
 
-    # Object Detection
+    # 🚧 Object Detection
     if object_btn:
         with st.spinner("Detecting objects..."):
             preds = detect_objects(img, detection_model)
@@ -76,7 +85,7 @@ if uploaded_file:
             st.subheader("🚧 Detected Objects")
             st.image(boxed)
 
-    # Assistance Prompt
+    # 🤖 Task Assistance
     if assist_btn:
         with st.spinner("Providing assistance..."):
             img_b64 = convert_image_to_base64(uploaded_file)
@@ -99,7 +108,7 @@ if uploaded_file:
             except Exception as e:
                 st.error(f"❌ Error: {e}")
 
-    # OCR via GPT-4o
+    # 📝 OCR Text Extraction
     if text_btn:
         with st.spinner("Extracting text..."):
             img_b64 = convert_image_to_base64(uploaded_file)
