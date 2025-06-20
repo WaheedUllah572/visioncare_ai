@@ -1,14 +1,11 @@
 import streamlit as st
-from openai import OpenAI
+import os
 from PIL import Image
-
 from utils import (
     convert_image_to_base64, extract_text_from_image,
     load_detection_model, detect_objects, draw_boxes
 )
 
-# ✅ Use st.secrets instead of os.getenv
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 detection_model = load_detection_model()
 
 st.set_page_config(page_title="👁️ VisionCare AI", layout="centered", page_icon="🌟")
@@ -20,7 +17,7 @@ Empowering Accessibility with AI Vision 💡
 - 🏞️ Scene Description  
 - 🚧 Object Detection  
 - 🧑‍🤝‍🧑 Personalized Assistance  
-- 📝 OCR (Text Extraction Only)
+- 📝 OCR (Text Extraction via GPT-4o)
 ---
 """)
 
@@ -41,6 +38,8 @@ if uploaded_file:
         with st.spinner("Analyzing scene..."):
             img_b64 = convert_image_to_base64(uploaded_file)
             prompt = "Describe the image simply for a blind person. Include objects, actions, people, and environment."
+            from openai import OpenAI
+            client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
             try:
                 res = client.chat.completions.create(
                     model="gpt-4o",
@@ -53,9 +52,8 @@ if uploaded_file:
                     }],
                     max_tokens=1024
                 )
-                response_text = res.choices[0].message.content
                 st.subheader("🏞️ Scene Description")
-                st.write(response_text)
+                st.write(res.choices[0].message.content)
             except Exception as e:
                 st.error(f"Error: {e}")
 
@@ -70,6 +68,8 @@ if uploaded_file:
         with st.spinner("Providing assistance..."):
             img_b64 = convert_image_to_base64(uploaded_file)
             assist_prompt = "Analyze this image and describe any helpful context or tasks it relates to (e.g., reading a label, recognizing a product)."
+            from openai import OpenAI
+            client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
             try:
                 res = client.chat.completions.create(
                     model="gpt-4o",
@@ -82,9 +82,8 @@ if uploaded_file:
                     }],
                     max_tokens=1024
                 )
-                assist_text = res.choices[0].message.content
                 st.subheader("🤖 Assistant Response")
-                st.write(assist_text)
+                st.write(res.choices[0].message.content)
             except Exception as e:
                 st.error(f"Error: {e}")
 
