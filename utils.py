@@ -1,57 +1,88 @@
-from PIL import Image, ImageDraw
 import base64
-import io
+from io import BytesIO
+from PIL import Image
 import torch
-from torchvision import transforms
-from torchvision.models.detection import fasterrcnn_resnet50_fpn
+import torchvision.transforms as transforms
+import torchvision
+import streamlit as st
+from openai import OpenAI
 
-# Convert image to base64 for OpenAI Vision API
-def convert_image_to_base64(uploaded_file):
-    img = Image.open(uploaded_file)
-    if img.mode in ("RGBA", "P"):
-        img = img.convert("RGB")
-    buffered = io.BytesIO()
-    img.save(buffered, format="JPEG")
-    img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+# Initialize OpenAI client
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+def convert_image_to_base64(image_file):
+    """Convert uploaded image to base64 format for OpenAI API."""
+    image = Image.open(image_file).convert("RGB")
+    buffered = BytesIO()
+    image.save(buffered, format="JPEG")
+    img_bytes = buffered.getvalue()
+    img_b64 = base64.b64encode(img_bytes).decode("utf-8")
     return img_b64
 
-# Load object detection model
+def extract_text_from_image(image_file):
+    """Use GPT-4o to extract text from an uploaded image."""
+    img_b64 = convert_image_to_base64(image_file)
+    prompt = "Extract all readable text from this image. Focus on documents, signs, or labels. Return only the plain text."
+
+    try:
+        res = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
+                ]
+            }],
+            max_tokens=1024
+        )
+        return res.choices[0].message.content
+    except Exception as e:
+        return f"Error during OCR: {e}"
+
 def load_detection_model():
-    model = fasterrcnn_resnet50_fpn(pretrained=True)
+    """Load a pre-trained Faster R-CNN object detection model from torchvision."""
+    model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
     model.eval()
     return model
 
-# Detect objects in the image
-def detect_objects(image, model, threshold=0.5):
-    transform = transforms.Compose([transforms.ToTensor()])
-    img_tensor = transform(image)
-    preds = model([img_tensor])[0]
-    keep = preds['scores'] > threshold
-    return {
-        "boxes": preds["boxes"][keep],
-        "labels": preds["labels"][keep],
-        "scores": preds["scores"][keep]
-    }
+def detect_objects(image, model, threshold=0.6):
+    """Run object detection on the input image and return labels/boxes above threshold."""
+    transform = transforms.Compose([
+        transforms.ToTensor()
+    ])
+    image_tensor = transform(image).unsqueeze(0)
+    with torch.no_grad():
+        preds = model(image_tensor)[0]
 
-# Draw object boxes on the image
-COCO_CLASSES = [
-    "__background__","person","bicycle","car","motorcycle","airplane","bus","train","truck","boat",
-    "traffic light","fire hydrant","N/A","stop sign","parking meter","bench","bird","cat","dog","horse",
-    "sheep","cow","elephant","bear","zebra","giraffe","N/A","backpack","umbrella","N/A","N/A","handbag",
-    "tie","suitcase","frisbee","skis","snowboard","sports ball","kite","baseball bat","baseball glove",
-    "skateboard","surfboard","tennis racket","bottle","N/A","wine glass","cup","fork","knife","spoon",
-    "bowl","banana","apple","sandwich","orange","broccoli","carrot","hot dog","pizza","donut","cake",
-    "chair","couch","potted plant","bed","N/A","dining table","N/A","N/A","toilet","N/A","tv","laptop",
-    "mouse","remote","keyboard","cell phone","microwave","oven","toaster","sink","refrigerator","N/A",
-    "book","clock","vase","scissors","teddy bear","hair drier","toothbrush"
-]
+    result = []
+    for i in range(len(preds["boxes"])):
+        score = preds["scores"][i].item()
+        if score >= threshold:
+            label = preds["labels"][i].item()
+            box = preds["boxes"][i].tolist()
+            result.append({
+                "label": label,
+                "box": box,
+                "score": score
+            })
+    return result
 
-def draw_boxes(image, predictions, threshold=0.5):
-    draw = ImageDraw.Draw(image)
-    for label, box, score in zip(predictions["labels"], predictions["boxes"], predictions["scores"]):
-        if score > threshold:
-            x1, y1, x2, y2 = box
-            class_name = COCO_CLASSES[label.item()] if label.item() < len(COCO_CLASSES) else "Unknown"
-            draw.rectangle([x1, y1, x2, y2], outline="yellow", width=3)
-            draw.text((x1, y1), f"{class_name} ({score:.2f})", fill="black")
-    return image
+def draw_boxes(image, predictions):
+    """Draw bounding boxes and labels on the image."""
+    import matplotlib.pyplot as plt
+    from torchvision.utils import draw_bounding_boxes
+    import torchvision.transforms.functional as F
+    import torchvision
+
+    labels_map = torchvision.models.detection.FasterRCNN_ResNet50_FPN_Weights.DEFAULT.meta["categories"]
+
+    boxes = torch.tensor([p["box"] for p in predictions])
+    labels = [labels_map[p["label"]] for p in predictions]
+
+    if boxes.nelement() == 0:
+        return image
+
+    img_tensor = transforms.ToTensor()(image)
+    img_boxed = draw_bounding_boxes(img_tensor, boxes, labels=labels, colors="red", width=3, font_size=16)
+    return F.to_pil_image(img_boxed)
