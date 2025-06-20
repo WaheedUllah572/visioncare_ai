@@ -1,11 +1,14 @@
 import streamlit as st
 import os
 from PIL import Image
+from openai import OpenAI
+
 from utils import (
-    convert_image_to_base64, extract_text_from_image,
+    convert_image_to_base64,
     load_detection_model, detect_objects, draw_boxes
 )
 
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 detection_model = load_detection_model()
 
 st.set_page_config(page_title="👁️ VisionCare AI", layout="centered", page_icon="🌟")
@@ -17,7 +20,7 @@ Empowering Accessibility with AI Vision 💡
 - 🏞️ Scene Description  
 - 🚧 Object Detection  
 - 🧑‍🤝‍🧑 Personalized Assistance  
-- 📝 OCR (Text Extraction via GPT-4o)
+- 📝 OCR (via GPT-4o)
 ---
 """)
 
@@ -25,11 +28,10 @@ uploaded_file = st.sidebar.file_uploader("📂 Upload Image", type=["jpg", "jpeg
 if uploaded_file:
     st.sidebar.image(uploaded_file, use_container_width=True)
 
-btn1, btn2, btn3, btn4 = st.columns(4)
+btn1, btn2, btn3 = st.columns(3)
 describe_btn = btn1.button("🏞️ Describe Scene")
 object_btn = btn2.button("🚧 Detect Objects")
 assist_btn = btn3.button("🤖 Assist")
-text_btn = btn4.button("📝 Extract Text")
 
 if uploaded_file:
     img = Image.open(uploaded_file)
@@ -38,8 +40,6 @@ if uploaded_file:
         with st.spinner("Analyzing scene..."):
             img_b64 = convert_image_to_base64(uploaded_file)
             prompt = "Describe the image simply for a blind person. Include objects, actions, people, and environment."
-            from openai import OpenAI
-            client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
             try:
                 res = client.chat.completions.create(
                     model="gpt-4o",
@@ -68,8 +68,6 @@ if uploaded_file:
         with st.spinner("Providing assistance..."):
             img_b64 = convert_image_to_base64(uploaded_file)
             assist_prompt = "Analyze this image and describe any helpful context or tasks it relates to (e.g., reading a label, recognizing a product)."
-            from openai import OpenAI
-            client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
             try:
                 res = client.chat.completions.create(
                     model="gpt-4o",
@@ -86,5 +84,3 @@ if uploaded_file:
                 st.write(res.choices[0].message.content)
             except Exception as e:
                 st.error(f"Error: {e}")
-
-
