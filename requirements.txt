@@ -2,6 +2,8 @@ streamlit
 openai
 python-dotenv
 Pillow
+numpy
+matplotlib==3.8.*
+opencv-python-headless
 torch
 torchvision
-
